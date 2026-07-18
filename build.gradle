@@ -1,0 +1,83 @@
+plugins {
+    id 'fabric-loom' version '1.16.3'
+    id 'maven-publish'
+}
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+loom {
+    // Phase 1 keeps client-only logic in src/client so the local player can be
+    // driven with legal keybinding input. Splitting the source sets keeps the
+    // common (server) jar free of client-only references.
+    splitEnvironmentSourceSets()
+
+    mods {
+        "moamagent" {
+            sourceSet sourceSets.main
+            sourceSet sourceSets.client
+        }
+    }
+}
+
+repositories {
+    mavenCentral()
+    maven { name = 'Fabric'; url = 'https://maven.fabricmc.net/' }
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+    // Gson ships with Minecraft (Mojang uses it), so no extra runtime dependency is needed.
+}
+
+processResources {
+    inputs.property "version", project.version
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version
+    }
+
+    // Bundle the Python controller into the jar under /agent so the mod can
+    // self-extract it into moamagent-AI/ at runtime (see AgentHome.java). The
+    // controller stays a single source of truth in python/; the run scripts,
+    // README and manifest live in src/main/resources/agent/ and are picked up
+    // automatically. Keep this list in sync with agent/manifest.txt.
+    from("python") {
+        into "agent"
+        include "agent_client.py"
+        include "goals.py"
+        include "agent_home.py"
+        include "trainer.py"
+        include "deep_trainer.py"
+        include "live_train.py"
+        include "llm_planner.py"
+        include "plan_runner.py"
+        include "world_model.py"
+        include "step_interpreter.py"
+        include "setup_env.py"
+        include "requirements.txt"
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.release = 21
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+    withSourcesJar()
+}
+
+jar {
+    inputs.property "archivesName", project.base.archivesName
+    from("LICENSE") {
+        rename { "${it}_${inputs.properties.archivesName}" }
+    }
+}
